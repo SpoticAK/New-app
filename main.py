@@ -172,22 +172,35 @@ def normalize(val, max_val, invert=False):
 
 
 def compute_component_scores(row, max_price, max_sales, max_reviews):
-    """
-    row: a dictionary-like (Series) with keys: price, sales_monthly, rating, reviews
-    returns dict of component scores (ints or None)
-    """
-    # Price: lower is better -> invert=True
-    price_score = normalize(row.get("price"), max_price, invert=True)
-    sales_score = normalize(row.get("sales_monthly"), max_sales)
-    # rating is on scale 0..5 -> convert to 0..100 directly if present
-    rating_val = row.get("rating")
-    rating_score = (
-        None
-        if rating_val is None
-        else int(max(0, min(100, round((float(rating_val) / 5.0) * 100))))
-    )
-    reviews_score = normalize(row.get("reviews"), max_reviews)
-    image_score = 100  # assumption for MVP (can be enhanced later)
+    # force numeric conversions (None if invalid)
+    try:
+        price_val = None if row.get("price") is None else float(row.get("price"))
+    except Exception:
+        price_val = None
+
+    try:
+        sales_raw = row.get("sales_monthly")
+        sales_val = None if sales_raw is None else float(sales_raw)
+    except Exception:
+        sales_val = None
+
+    try:
+        rating_raw = row.get("rating")
+        rating_val = None if rating_raw is None else float(rating_raw)
+    except Exception:
+        rating_val = None
+
+    try:
+        reviews_raw = row.get("reviews")
+        reviews_val = None if reviews_raw is None else float(reviews_raw)
+    except Exception:
+        reviews_val = None
+
+    price_score = normalize(price_val, max_price, invert=True)
+    sales_score = normalize(sales_val, max_sales)
+    rating_score = None if rating_val is None else int(max(0, min(100, round((rating_val / 5.0) * 100))))
+    reviews_score = normalize(reviews_val, max_reviews)
+    image_score = 100
 
     return {
         "score_price": price_score,
@@ -307,11 +320,19 @@ df["asin"] = df.apply(lambda r: f"SKU{int(r['index'])+1:06d}", axis=1)
 df["category"] = df.get("Category", "Fitness")
 
 # -----------------------
-# compute normalization maxima (ignoring None)
-# -----------------------
-max_price = df["price"].dropna().max() if not df["price"].dropna().empty else 1
-max_sales = df["sales_monthly"].dropna().max() if not df["sales_monthly"].dropna().empty else 1
-max_reviews = df["reviews"].dropna().max() if not df["reviews"].dropna().empty else 1
+# compute normalization maxima (ignore None/NA)
+def safe_max(series, default=1):
+    s = series.dropna()
+    if s.empty:
+        return float(default)
+    # coerce to numeric safely
+    nums = pd.to_numeric(s, errors="coerce").dropna()
+    return float(nums.max()) if not nums.empty else float(default)
+
+max_price = safe_max(df["price"], default=1)
+max_sales = safe_max(df["sales_monthly"], default=1)
+max_reviews = safe_max(df["reviews"], default=1)
+
 
 # -----------------------
 # compute component scores and final score
@@ -347,7 +368,14 @@ elif sort_by == "price":
 # show table with NA display
 # -----------------------
 def display_cell(val):
-    return "NA" if (val is None or (isinstance(val, float) and not math.isfinite(val))) else val
+    # show 'NA' for missing, else format ints (no .0)
+    if val is None or (isinstance(val, float) and not math.isfinite(val)):
+        return "NA"
+    # if float but whole number, remove .0
+    if isinstance(val, float) and val.is_integer():
+        return int(val)
+    return val
+
 
 
 df_display = df2[
