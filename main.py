@@ -6,6 +6,7 @@ import streamlit as st
 import pandas as pd
 import re
 from io import StringIO
+import math
 
 st.set_page_config(page_title="Product Discovery MVP", layout="wide")
 
@@ -113,15 +114,39 @@ def parse_price(s):
 # ---------------------------------------------------
 
 def normalize(val, max_val, invert=False):
-    """Normalize to 0–100. If val=None, score=None."""
+    """
+    Normalize to 0–100. If val is None / NaN / non-finite, return None.
+    Handles bad inputs robustly and avoids round(nan) errors.
+    """
+    # treat None/empty as missing
     if val is None:
         return None
-    if max_val <= 0:
+
+    # try convert to float
+    try:
+        v = float(val)
+    except Exception:
         return None
 
-    pct = (float(val) / max_val) * 100
+    # reject NaN / Inf
+    if not math.isfinite(v):
+        return None
+
+    # validate max_val
+    try:
+        max_v = float(max_val)
+    except Exception:
+        return None
+    if not math.isfinite(max_v) or max_v <= 0:
+        return None
+
+    pct = (v / max_v) * 100
     if invert:
         pct = 100 - pct
+
+    # after math, if pct is non-finite -> treat as missing
+    if not math.isfinite(pct):
+        return None
 
     return int(max(0, min(100, round(pct))))
 
