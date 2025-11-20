@@ -1,138 +1,159 @@
 # app/main.py
-# Ultra-simple Streamlit MVP — Clean, Robust Parsing + NA Handling
+# Product Discovery — Robust Single-file Streamlit MVP
 # Works with CSV headers: Image, Title, Price, Ratings, Review, Monthly Sales
+#
+# Features:
+# - Robust parsing (commas in numbers, "4.0 out of 5 stars", "2K+ bought...", currency symbols)
+# - K/M handling (K -> *1000, M -> *1_000_000)
+# - Missing/blank fields displayed as "NA" in the UI (not 0)
+# - Safe normalization & safe progress bars
+# - Reads ONLY the CSV uploaded via the Streamlit uploader (no server path)
 
-import streamlit as st
-import pandas as pd
+import math
 import re
 from io import StringIO
-import math
 
-st.set_page_config(page_title="Product Discovery MVP", layout="wide")
+import pandas as pd
+import streamlit as st
 
-# ---------------------------------------------------
-# CONFIG
-# ---------------------------------------------------
+st.set_page_config(page_title="Product Discovery — Robust MVP", layout="wide")
+
+# -----------------------
+# Config
+# -----------------------
 WEIGHTS = {
     "price": 0.20,
     "sales": 0.25,
     "rating": 0.20,
     "reviews": 0.15,
-    "image": 0.20
+    "image": 0.20,
 }
 
-# ---------------------------------------------------
-# PARSING HELPERS
-# ---------------------------------------------------
+# -----------------------
+# Regex helpers
+# -----------------------
+NUM_RE = re.compile(r"[\d,.]+")            # matches numbers with commas or dots
+FLOAT_RE = re.compile(r"(\d+(?:\.\d+)?)")  # matches float like 4.0
 
-num_re = re.compile(r"[\d,.]+")
-float_re = re.compile(r"(\d+(?:\.\d+)?)")
-
+# -----------------------
+# Parsing functions
+# -----------------------
 def extract_number_int(s):
-    """Extract integers from messy strings. Supports '1,111', '2K+', '1.5M', etc."""
+    """
+    Extract integer from messy strings.
+    Returns an int or None.
+    Supports:
+      - '1,111' -> 1111
+      - '2K+' / '2k' -> 2000
+      - '1.5K' -> 1500
+      - '3M' -> 3000000
+      - '500+' -> 500
+      - '' or None -> None
+    """
     if s is None:
         return None
     s = str(s).strip()
-    if s == "" or s.lower() in ["nan", "none"]:
+    if s == "" or s.lower() in ("nan", "none"):
         return None
 
-    lower_s = s.lower()
-
-    # Find first numerical chunk (may include decimal point or comma)
-    m = num_re.search(s)
+    lower = s.lower()
+    m = NUM_RE.search(s)
     if not m:
         return None
+    raw = m.group(0).replace(",", "")  # remove thousand separators
 
-    raw = m.group(0).replace(",", "")  # e.g. "1,111" -> "1111"
-
-    # Handle K / M formatting
-    if "k" in lower_s:
+    # If original string contains 'k' or 'm', scale accordingly
+    if "k" in lower:
         try:
-            return int(float(raw) * 1000)
-        except:
+            return int(float(raw) * 1_000)
+        except Exception:
             pass
-    if "m" in lower_s:
+    if "m" in lower:
         try:
             return int(float(raw) * 1_000_000)
-        except:
+        except Exception:
             pass
 
-    # Normal number
+    # fallback to integer parse
     try:
         if "." in raw:
             return int(float(raw))
         return int(raw)
-    except:
+    except Exception:
         digits = re.sub(r"[^\d]", "", raw)
         return int(digits) if digits else None
 
 
 def extract_number_float(s):
-    """Extract floats like '4.0 out of 5 stars'."""
+    """
+    Extract float-like number (e.g., ratings).
+    Returns float or None.
+    Examples:
+      - '4.0 out of 5 stars' -> 4.0
+      - '4' -> 4.0
+      - '' or None -> None
+    """
     if s is None:
         return None
     s = str(s).strip()
-    if s == "" or s.lower() in ["nan", "none"]:
+    if s == "" or s.lower() in ("nan", "none"):
         return None
 
-    m = float_re.search(s)
-    if not m:
-        num = extract_number_int(s)
-        return float(num) if num is not None else None
+    m = FLOAT_RE.search(s)
+    if m:
+        try:
+            return float(m.group(1))
+        except Exception:
+            pass
 
-    try:
-        return float(m.group(1))
-    except:
-        num = extract_number_int(s)
-        return float(num) if num is not None else None
+    # fallback to integer extraction
+    num = extract_number_int(s)
+    return float(num) if num is not None else None
 
 
 def parse_price(s):
-    """Extract price from formats like ₹699, 1,199 etc."""
+    """
+    Parse price-like strings such as '₹699', '1,199', '699.00'.
+    Returns float or None.
+    """
     if s is None:
         return None
     s = str(s).strip()
-    if s == "" or s.lower() in ["nan", "none"]:
+    if s == "" or s.lower() in ("nan", "none"):
         return None
 
-    m = num_re.search(s)
+    m = NUM_RE.search(s)
     if not m:
         return None
-
     raw = m.group(0).replace(",", "")
     try:
         return float(raw)
-    except:
+    except Exception:
+        cleaned = re.sub(r"[^\d.]", "", raw)
         try:
-            return float(re.sub(r"[^\d.]", "", raw))
-        except:
+            return float(cleaned)
+        except Exception:
             return None
 
 
-# ---------------------------------------------------
-# SCORING HELPERS
-# ---------------------------------------------------
-
+# -----------------------
+# Normalization & scoring
+# -----------------------
 def normalize(val, max_val, invert=False):
     """
-    Normalize to 0–100. If val is None / NaN / non-finite, return None.
-    Handles bad inputs robustly and avoids round(nan) errors.
+    Normalize a numeric value to 0..100.
+    Returns int 0..100 or None if val is missing/invalid.
+    Avoids round(nan) errors.
     """
-    # treat None/empty as missing
     if val is None:
         return None
-
-    # try convert to float
     try:
         v = float(val)
     except Exception:
         return None
-
-    # reject NaN / Inf
     if not math.isfinite(v):
         return None
 
-    # validate max_val
     try:
         max_v = float(max_val)
     except Exception:
@@ -140,11 +161,10 @@ def normalize(val, max_val, invert=False):
     if not math.isfinite(max_v) or max_v <= 0:
         return None
 
-    pct = (v / max_v) * 100
+    pct = (v / max_v) * 100.0
     if invert:
-        pct = 100 - pct
+        pct = 100.0 - pct
 
-    # after math, if pct is non-finite -> treat as missing
     if not math.isfinite(pct):
         return None
 
@@ -152,151 +172,237 @@ def normalize(val, max_val, invert=False):
 
 
 def compute_component_scores(row, max_price, max_sales, max_reviews):
+    """
+    row: a dictionary-like (Series) with keys: price, sales_monthly, rating, reviews
+    returns dict of component scores (ints or None)
+    """
+    # Price: lower is better -> invert=True
+    price_score = normalize(row.get("price"), max_price, invert=True)
+    sales_score = normalize(row.get("sales_monthly"), max_sales)
+    # rating is on scale 0..5 -> convert to 0..100 directly if present
+    rating_val = row.get("rating")
+    rating_score = (
+        None
+        if rating_val is None
+        else int(max(0, min(100, round((float(rating_val) / 5.0) * 100))))
+    )
+    reviews_score = normalize(row.get("reviews"), max_reviews)
+    image_score = 100  # assumption for MVP (can be enhanced later)
+
     return {
-        "score_price": normalize(row["price"], max_price, invert=True),
-        "score_sales": normalize(row["sales_monthly"], max_sales),
-        "score_rating": normalize((row["rating"] or 0) * 20, 100),  # rating out of 5 → 0–100
-        "score_reviews": normalize(row["reviews"], max_reviews),
-        "score_image": 100,  # assume good for MVP
+        "score_price": price_score,
+        "score_sales": sales_score,
+        "score_rating": rating_score,
+        "score_reviews": reviews_score,
+        "score_image": image_score,
     }
 
 
-def compute_final_score(c):
-    """Final weighted score; if any component None, treat as 0."""
-    total = 0
+def compute_final_score(components):
+    """
+    Weighted sum. If a component is None, treat it as 0 in final score calculation.
+    Returns integer 0..100
+    """
+    total = 0.0
     for key, w in WEIGHTS.items():
         comp_name = f"score_{key}"
-        val = c.get(comp_name)
-        total += (val if val is not None else 0) * w
+        val = components.get(comp_name)
+        total += (val if (val is not None) else 0) * w
     return int(round(total))
 
 
-# ---------------------------------------------------
-# UI — FILE UPLOAD
-# ---------------------------------------------------
+# -----------------------
+# UI helpers
+# -----------------------
+def display_val(v):
+    """Return 'NA' for missing values, else return value (formatted)."""
+    if v is None or (isinstance(v, float) and (math.isnan(v) or not math.isfinite(v))):
+        return "NA"
+    return v
 
-st.title("Product Discovery — Clean MVP")
-st.write("Upload your CSV with headers: **Image, Title, Price, Ratings, Review, Monthly Sales**")
 
-uploaded = st.file_uploader("Upload CSV", type=["csv"])
+def safe_progress(score):
+    """
+    Display a progress indicator safely.
+    Accepts score in 0..100 or None. If None -> shows 'NA' text.
+    """
+    if score is None:
+        st.write("NA")
+        return
+    try:
+        v = float(score)
+    except Exception:
+        st.write("NA")
+        return
+    if not math.isfinite(v):
+        st.write("NA")
+        return
+    v = max(0.0, min(100.0, v))
+    st.progress(v / 100.0)
+
+
+# -----------------------
+# Main UI - file upload
+# -----------------------
+st.title("Product Discovery — Robust MVP")
+st.write("Upload CSV with headers: Image, Title, Price, Ratings, Review, Monthly Sales")
+
+col_main, col_actions = st.columns([3, 1])
+
+with col_actions:
+    uploaded = st.file_uploader("Upload CSV", type=["csv"])
+    if st.button("Use small example CSV"):
+        sample = """Image,Title,Price,Ratings,Review,Monthly Sales
+https://via.placeholder.com/240,Adjustable Kettlebell 6kg,699,4.2,420,1450
+https://via.placeholder.com/240,Yoga Resistance Band,349,4.0,210,850
+"""
+        uploaded = StringIO(sample)
+
+with col_main:
+    search_q = st.text_input("Search title / ASIN", "")
+    sort_by = st.selectbox("Sort by", ["final_score", "sales_monthly", "price"])
 
 if not uploaded:
-    st.info("Please upload your CSV to continue.")
+    st.info("Please upload a CSV file to continue.")
     st.stop()
 
+# -----------------------
+# Read CSV (only from uploader)
+# -----------------------
 try:
     df_raw = pd.read_csv(uploaded, dtype=str)
 except Exception as e:
-    st.error(f"Error reading CSV: {e}")
+    st.error(f"Failed to read CSV: {e}")
     st.stop()
 
-required = {"Image", "Title", "Price", "Ratings", "Review", "Monthly Sales"}
-missing = required - set(df_raw.columns)
+required_cols = {"Image", "Title", "Price", "Ratings", "Review", "Monthly Sales"}
+missing = required_cols - set(df_raw.columns)
 if missing:
-    st.error("Missing required columns: " + ", ".join(missing))
+    st.error("CSV missing required columns: " + ", ".join(sorted(missing)))
     st.stop()
 
-# ---------------------------------------------------
-# CLEAN + MAP COLUMNS
-# ---------------------------------------------------
-df = df_raw.rename(columns={
-    "Image": "image_url",
-    "Title": "title",
-    "Price": "price_raw",
-    "Ratings": "rating_raw",
-    "Review": "reviews_raw",
-    "Monthly Sales": "sales_raw",
-}).copy()
+# -----------------------
+# Map & parse columns
+# -----------------------
+df = df_raw.rename(
+    columns={
+        "Image": "image_url",
+        "Title": "title",
+        "Price": "price_raw",
+        "Ratings": "rating_raw",
+        "Review": "reviews_raw",
+        "Monthly Sales": "sales_raw",
+    }
+).copy()
 
-# Parse clean numeric fields
+# parse numeric fields into cleaned columns (None for missing)
 df["price"] = df["price_raw"].apply(parse_price)
 df["rating"] = df["rating_raw"].apply(extract_number_float)
 df["reviews"] = df["reviews_raw"].apply(extract_number_int)
 df["sales_monthly"] = df["sales_raw"].apply(extract_number_int)
 
-# Add ASIN-like ID
+# generate ASIN-like id and default category
 df.reset_index(inplace=True, drop=False)
-df["asin"] = df.apply(lambda r: f"SKU{r['index']+1:06d}", axis=1)
-df["category"] = "Fitness"
+df["asin"] = df.apply(lambda r: f"SKU{int(r['index'])+1:06d}", axis=1)
+df["category"] = df.get("Category", "Fitness")
 
-# ---------------------------------------------------
-# NORMALIZATION LIMITS (ignore None)
-# ---------------------------------------------------
-max_price = df["price"].dropna().max() or 1
-max_sales = df["sales_monthly"].dropna().max() or 1
-max_reviews = df["reviews"].dropna().max() or 1
+# -----------------------
+# compute normalization maxima (ignoring None)
+# -----------------------
+max_price = df["price"].dropna().max() if not df["price"].dropna().empty else 1
+max_sales = df["sales_monthly"].dropna().max() if not df["sales_monthly"].dropna().empty else 1
+max_reviews = df["reviews"].dropna().max() if not df["reviews"].dropna().empty else 1
 
-# ---------------------------------------------------
-# COMPUTE SCORES
-# ---------------------------------------------------
-rows = []
-for _, r in df.iterrows():
-    comps = compute_component_scores(r, max_price, max_sales, max_reviews)
+# -----------------------
+# compute component scores and final score
+# -----------------------
+computed = []
+for _, row in df.iterrows():
+    comps = compute_component_scores(row, max_price, max_sales, max_reviews)
     final = compute_final_score(comps)
-    row = r.to_dict()
-    row.update(comps)
-    row["final_score"] = final
-    rows.append(row)
+    rec = row.to_dict()
+    rec.update(comps)
+    rec["final_score"] = final
+    computed.append(rec)
 
-df2 = pd.DataFrame(rows)
+df2 = pd.DataFrame(computed)
 
-# ---------------------------------------------------
-# SEARCH + SORT
-# ---------------------------------------------------
-search_q = st.text_input("Search title / ASIN", "")
-sort_by = st.selectbox("Sort by", ["final_score", "sales_monthly", "price"])
-
+# -----------------------
+# search & sort
+# -----------------------
 if search_q:
-    df2 = df2[df2["title"].str.contains(search_q, case=False, na=False) |
-              df2["asin"].str.contains(search_q, case=False, na=False)]
+    df2 = df2[
+        df2["title"].str.contains(search_q, case=False, na=False)
+        | df2["asin"].str.contains(search_q, case=False, na=False)
+    ]
 
-df2 = df2.sort_values(by=sort_by, ascending=(sort_by == "price"))
+if sort_by == "final_score":
+    df2 = df2.sort_values(by="final_score", ascending=False)
+elif sort_by == "sales_monthly":
+    df2 = df2.sort_values(by="sales_monthly", ascending=False)
+elif sort_by == "price":
+    df2 = df2.sort_values(by="price", ascending=True)
 
-# ---------------------------------------------------
-# DISPLAY TABLE ("NA" for missing values)
-# ---------------------------------------------------
-def display(val):
-    return "NA" if val is None or pd.isna(val) else val
+# -----------------------
+# show table with NA display
+# -----------------------
+def display_cell(val):
+    return "NA" if (val is None or (isinstance(val, float) and not math.isfinite(val))) else val
 
-df_display = df2[["asin", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]].copy()
-df_display = df_display.applymap(display)
+
+df_display = df2[
+    ["asin", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]
+].copy()
+df_display = df_display.applymap(display_cell)
 
 st.subheader("Products")
-st.dataframe(df_display, height=400)
+st.dataframe(df_display.reset_index(drop=True), height=450)
 
-# ---------------------------------------------------
-# DETAIL PANEL
-# ---------------------------------------------------
-st.subheader("Product Details")
-selected = st.selectbox("Select product (ASIN)", [""] + df2["asin"].tolist())
+# -----------------------
+# detail panel
+# -----------------------
+st.subheader("Product details")
+sel = st.selectbox("Select product (ASIN)", options=[""] + df2["asin"].tolist())
 
-if selected:
-    p = df2[df2["asin"] == selected].iloc[0]
+if sel:
+    p = df2[df2["asin"] == sel].iloc[0]
 
-    col1, col2 = st.columns([2,1])
+    left, right = st.columns([2, 1])
 
-    with col1:
-        st.image(p["image_url"], width=320)
-        st.markdown(f"### {p['title']}")
-        st.write(f"Price: {display(p['price'])}")
-        st.write(f"Sales/month: {display(p['sales_monthly'])}")
-        st.write(f"Rating: {display(p['rating'])}")
-        st.write(f"Reviews: {display(p['reviews'])}")
+    with left:
+        st.image(p.get("image_url"), width=320)
+        st.markdown(f"### {p.get('title')}")
+        st.write(f"ASIN: {p.get('asin')}  •  Category: {p.get('category')}")
+        st.write(f"Price: {display_cell(p.get('price'))}")
+        st.write(f"Sales/month: {display_cell(p.get('sales_monthly'))}")
+        st.write(f"Rating: {display_cell(p.get('rating'))}")
+        st.write(f"Reviews: {display_cell(p.get('reviews'))}")
 
         st.markdown("### Component Scores")
-        for key in ["price", "sales", "rating", "reviews", "image"]:
-            score = p.get(f"score_{key}")
-            st.write(f"{key.capitalize()} score: {display(score)}")
-            if score is not None:
-                st.progress(score / 100)
+        st.write(f"Price score: {display_cell(p.get('score_price'))} / 100")
+        safe_progress(p.get("score_price"))
 
-    with col2:
+        st.write(f"Sales score: {display_cell(p.get('score_sales'))} / 100")
+        safe_progress(p.get("score_sales"))
+
+        st.write(f"Rating score: {display_cell(p.get('score_rating'))} / 100")
+        safe_progress(p.get("score_rating"))
+
+        st.write(f"Reviews score: {display_cell(p.get('score_reviews'))} / 100")
+        safe_progress(p.get("score_reviews"))
+
+        st.write(f"Image score: {display_cell(p.get('score_image'))} / 100")
+        safe_progress(p.get("score_image"))
+
+    with right:
         st.markdown("### Final Score")
-        st.metric("Final", p["final_score"])
-        st.progress(p["final_score"] / 100)
+        st.metric("Final", p.get("final_score"))
+        st.progress(p.get("final_score", 0) / 100.0)
+
         st.markdown("---")
+        st.button("Find suppliers (mock)")
         st.button("Bookmark")
-        st.button("Add Note")
+        st.button("Add note")
 
 st.markdown("---")
-st.info("Blank fields now show 'NA'. Monthly Sales handles K/M formats. Ratings, Reviews, Price are fully cleaned.")
+st.info("Blank fields display as 'NA'. Monthly Sales supports K/M shorthand. If a few rows still look odd, paste 2–3 raw cell examples and I'll tweak the parser.")
