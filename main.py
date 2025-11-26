@@ -466,13 +466,24 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
     )
 
     # Detail panel
-    st.subheader("Product details")
-    sel = st.selectbox("Select product (ASIN)", [""] + df2["asin"].tolist())
+st.subheader("Product details")
 
-    if sel:
-        p = df2[df2["asin"] == sel].iloc[0]
+if df2.empty:
+    st.write("No products to show.")
+    selected_idx = None
+else:
+    # select by row index, show title in dropdown
+    selected_idx = st.selectbox(
+        "Select product",
+        df2.index,
+        format_func=lambda i: df2.loc[i, "title"],
+    )
 
-        left, right = st.columns([2, 1])
+if selected_idx is not None:
+    p = df2.loc[selected_idx]
+    sel = p.get("asin")  # internal ASIN for bookmarks, notes, etc.
+
+    left, right = st.columns([2, 1])
 
         with left:
             st.image(p.get("image_url"), width=320)
@@ -527,7 +538,7 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
         bookmarked_products = df2[df2["asin"].isin(st.session_state.bookmarks)]
         st.dataframe(
             bookmarked_products[
-                ["asin", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]
+                ["title", "price", "sales_monthly", "rating", "reviews", "final_score"]
             ].reset_index(drop=True).style.format(format_value),
             height=300
         )
