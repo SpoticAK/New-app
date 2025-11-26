@@ -60,11 +60,11 @@ def extract_number_int(s):
     # look at the immediate suffix right after the number
     suffix = s[end_pos:].lstrip()
 
-    # Default: do NOT apply M logic at all
+    # ONLY accept k / K as thousand, ignore M completely
     multiplier = 1
     if suffix:
         first = suffix[0].lower()
-        if first == "k":     # ONLY accept k / K
+        if first == "k":
             multiplier = 1000
 
     try:
@@ -76,6 +76,7 @@ def extract_number_int(s):
         base = float(digits)
 
     return int(base * multiplier)
+
 
 def extract_number_float(s):
     """
@@ -253,7 +254,7 @@ def compute_scores_row(row):
     """
     Compute component scores + final_score for a single row dict.
     Handles missing fields by:
-      - showing NA for that component
+      - NA for that component
       - excluding that component's max points from available_weight
       - scaling final_score back to TOTAL_MAX_POINTS (80)
     """
@@ -326,6 +327,15 @@ def safe_progress(score, max_points):
         return
     v = max(0.0, min(max_points, v))
     st.progress(v / max_points)
+
+
+def format_value(val):
+    """Formatter for table display: NA, remove .0, but keeps sorting numeric."""
+    if val is None or (isinstance(val, float) and not math.isfinite(val)):
+        return "NA"
+    if isinstance(val, float) and val.is_integer():
+        return str(int(val))
+    return str(val)
 
 
 # -----------------------
@@ -412,22 +422,15 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
     elif sort_by == "price":
         df2 = df2.sort_values(by="price", ascending=True, na_position="last")
 
-def format_value(val):
-    if val is None or (isinstance(val, float) and not math.isfinite(val)):
-        return "NA"
-    if isinstance(val, float) and val.is_integer():
-        return str(int(val))
-    return str(val)
-    
     # Product table
     st.subheader("Products")
     df_display = df2[
         ["asin", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]
     ].copy()
-    df_display = df_display.applymap(display_cell)
+
     st.dataframe(
-    df_display.reset_index(drop=True).style.format(format_value),
-    height=450
+        df_display.reset_index(drop=True).style.format(format_value),
+        height=450,
     )
 
     # Detail panel
