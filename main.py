@@ -371,6 +371,11 @@ def main():
     st.title("Product Discovery — MVP (Custom Scoring)")
     st.write("Upload CSV with columns: **Image, Title, Price, Ratings, Review, Monthly Sales**")
 
+    # initialize bookmarks in session state
+    if "bookmarks" not in st.session_state:
+        st.session_state.bookmarks = []
+
+
     col_main, col_side = st.columns([3, 1])
 
     with col_side:
@@ -501,9 +506,31 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
                 st.write("-")
 
             st.markdown("---")
-            st.button("Bookmark")
+
+            # Bookmark button
+            if st.button("Bookmark"):
+                if sel not in st.session_state.bookmarks:
+                    st.session_state.bookmarks.append(sel)
+                    st.success("Bookmarked!")
+                else:
+                    st.info("Already bookmarked.")
+
+            # Add Note button
             st.button("Add Note")
 
+    # Show Bookmarks Section
+    st.subheader("Your Bookmarks")
+
+    if len(st.session_state.bookmarks) == 0:
+        st.write("No bookmarks yet.")
+    else:
+        bookmarked_products = df2[df2["asin"].isin(st.session_state.bookmarks)]
+        st.dataframe(
+            bookmarked_products[
+                ["asin", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]
+            ].reset_index(drop=True).style.format(format_value),
+            height=300
+        )
     st.markdown("---")
     st.info("Scoring uses your exact brackets. Missing fields show '-' and are excluded from the denominator, then scaled back to a max of 80.")
 
