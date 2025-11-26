@@ -443,20 +443,11 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
         ["asin", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]
     ].copy()
 
-    # convert None/NaN/"None"/"nan"/"" to '-'
-    df_display_clean = df_display.reset_index(drop=True).copy()
-
-    df_display_clean = df_display_clean.applymap(
-        lambda v: "-"
-        if (
-            v is None
-            or (isinstance(v, float) and not math.isfinite(v))
-            or (isinstance(v, str) and v.strip().lower() in ("none", "nan", "na", ""))
-        )
-        else (int(v) if isinstance(v, float) and v.is_integer() else v)
+    st.dataframe(
+        df_display.reset_index(drop=True).style.format(format_value),
+        height=450,
     )
 
-    st.dataframe(df_display_clean, height=450)
 
 
     # Detail panel
