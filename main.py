@@ -1,5 +1,5 @@
 # app/main.py
-# Product Discovery — MVP with YOUR custom scoring system
+# Product Discovery — MVP with YOUR custom scoring system + pagination
 
 import math
 import re
@@ -20,6 +20,7 @@ WEIGHTS = {
     "sales": 25,
 }
 TOTAL_MAX_POINTS = sum(WEIGHTS.values())  # 80
+PAGE_SIZE = 25  # items per page
 
 # -----------------------
 # REGEX HELPERS
@@ -132,9 +133,9 @@ def parse_reviews(s):
 # -----------------------
 # SCORING: YOUR BRACKET RULES
 # -----------------------
-# PRICE (max 20)
-# <200 = 5, 200-250 = 10, 250-300 = 15, >300 = 20
 def score_price(price):
+    # PRICE (max 20)
+    # <200 = 5, 200-250 = 10, 250-300 = 15, >300 = 20
     if price is None:
         return None
     try:
@@ -153,9 +154,10 @@ def score_price(price):
     else:
         return 20
 
-# REVIEW (max 15)
-# <50 = 5, 50-500 = 10, 500-1000 = 15, >1000 = 5
+
 def score_reviews(reviews):
+    # REVIEW (max 15)
+    # <50 = 5, 50-500 = 10, 500-1000 = 15, >1000 = 5
     if reviews is None:
         return None
     try:
@@ -175,9 +177,10 @@ def score_reviews(reviews):
     else:
         return 5
 
-# RATING (max 20)
-# <3.4 = 5, 3.4-3.7 = 10, 3.7-4.0 = 15, >4.0 = 20
+
 def score_rating(rating):
+    # RATING (max 20)
+    # <3.4 = 5, 3.4-3.7 = 10, 3.7-4.0 = 15, >4.0 = 20
     if rating is None:
         return None
     try:
@@ -196,9 +199,10 @@ def score_rating(rating):
     else:
         return 20
 
-# MONTHLY SALES (max 25)
-# <100 = 5, 100-200 = 15, 200-500 = 20, 500-1000 = 25, 1000-5000 = 10, >5000 = 5
+
 def score_sales(sales):
+    # MONTHLY SALES (max 25)
+    # <100 = 5, 100-200 = 15, 200-500 = 20, 500-1000 = 25, 1000-5000 = 10, >5000 = 5
     if sales is None:
         return None
     try:
@@ -284,6 +288,7 @@ def display_cell(val):
         return int(val)
     return val
 
+
 def safe_progress(score, max_points):
     """Safe progress bar for a component with given max_points."""
     if score is None:
@@ -300,8 +305,9 @@ def safe_progress(score, max_points):
     v = max(0.0, min(max_points, v))
     st.progress(v / max_points)
 
+
 def format_value(val):
-    """Formatter for table display when using st.dataframe (bookmarks)."""
+    """Formatter for bookmarks table (st.dataframe)."""
     if (
         val is None
         or (isinstance(val, float) and not math.isfinite(val))
@@ -311,6 +317,69 @@ def format_value(val):
     if isinstance(val, float) and val.is_integer():
         return str(int(val))
     return str(val)
+
+
+def render_pagination(total_items):
+    """Render pagination controls top + bottom, return (start_idx, end_idx)."""
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = 1
+
+    current_page = st.session_state.current_page
+    if total_items == 0:
+        total_pages = 1
+    else:
+        total_pages = math.ceil(total_items / PAGE_SIZE)
+
+    # Clamp current_page into valid range
+    if current_page < 1:
+        current_page = 1
+    if current_page > total_pages:
+        current_page = total_pages
+    st.session_state.current_page = current_page
+
+    def pager_row(suffix: str):
+        col_prev, col_info, col_next = st.columns([1, 2, 1])
+        with col_info:
+            st.write(f"Page {current_page} / {total_pages}")
+        with col_prev:
+            if st.button("Prev", key=f"prev_{suffix}", disabled=current_page <= 1):
+                st.session_state.current_page = max(1, current_page - 1)
+        with col_next:
+            if st.button("Next", key=f"next_{suffix}", disabled=current_page >= total_pages):
+                st.session_state.current_page = min(total_pages, current_page + 1)
+
+    # Top controls
+    pager_row("top")
+
+    # After possible button clicks, refresh current_page
+    current_page = st.session_state.current_page
+    if total_items == 0:
+        total_pages = 1
+    else:
+        total_pages = math.ceil(total_items / PAGE_SIZE)
+
+    start_idx = (current_page - 1) * PAGE_SIZE
+    end_idx = start_idx + PAGE_SIZE
+
+    return start_idx, end_idx, total_pages
+
+
+def render_pagination_bottom(total_items, total_pages):
+    """Render bottom pagination row (using current_page from session_state)."""
+    current_page = st.session_state.current_page
+    def pager_row(suffix: str):
+        col_prev, col_info, col_next = st.columns([1, 2, 1])
+        with col_info:
+            st.write(f"Page {current_page} / {total_pages}")
+        with col_prev:
+            if st.button("Prev", key=f"prev_{suffix}", disabled=current_page <= 1):
+                st.session_state.current_page = max(1, current_page - 1)
+        with col_next:
+            if st.button("Next", key=f"next_{suffix}", disabled=current_page >= total_pages):
+                st.session_state.current_page = min(total_pages, current_page + 1)
+
+    pager_row("bottom")
+
 
 # -----------------------
 # MAIN APP
@@ -324,6 +393,8 @@ def main():
         st.session_state.bookmarks = []
     if "selected_asin" not in st.session_state:
         st.session_state.selected_asin = None
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = 1
 
     col_main, col_side = st.columns([3, 1])
 
@@ -399,13 +470,22 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
         df2 = df2.sort_values(by="price", ascending=True, na_position="last")
 
     # -----------------------
-    # Product "table" with View buttons (no ASIN shown)
+    # Product "table" with View buttons + pagination (no ASIN shown)
     # -----------------------
     st.subheader("Products")
 
-    if df2.empty:
+    total_items = len(df2)
+    if total_items == 0:
         st.write("No products to show.")
+        selected_product = None
     else:
+        # TOP pagination
+        start_idx, end_idx, total_pages = render_pagination(total_items)
+        current_page = st.session_state.current_page
+
+        # slice current page
+        df_page = df2.iloc[start_idx:end_idx]
+
         # header row
         h_cols = st.columns([4, 1, 1, 1, 1, 1, 1])
         h_cols[0].markdown("**Title**")
@@ -416,7 +496,7 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
         h_cols[5].markdown("**Final Score**")
         h_cols[6].markdown("**Action**")
 
-        for idx, row in df2.iterrows():
+        for _, row in df_page.iterrows():
             cols = st.columns([4, 1, 1, 1, 1, 1, 1])
             cols[0].write(display_cell(row.get("title")))
             cols[1].write(display_cell(row.get("price")))
@@ -428,12 +508,15 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
             if cols[6].button("View", key=f"view_{row.get('asin')}"):
                 st.session_state.selected_asin = row.get("asin")
 
+        # BOTTOM pagination
+        render_pagination_bottom(total_items, total_pages)
+
     # -----------------------
     # Detail panel
     # -----------------------
     st.subheader("Product details")
 
-    if df2.empty or st.session_state.selected_asin is None:
+    if len(df2) == 0 or st.session_state.selected_asin is None:
         st.write("Click 'View' on a product above to see details.")
     else:
         matches = df2[df2["asin"] == st.session_state.selected_asin]
@@ -486,7 +569,7 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
                     else:
                         st.info("Already bookmarked.")
 
-                # Notes: to be implemented later
+                # Notes placeholder (future)
                 st.button("Add Note")
 
     # -----------------------
