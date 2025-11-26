@@ -397,6 +397,8 @@ def main():
         st.session_state.current_page = 1
     if "last_clicked_asin" not in st.session_state:
         st.session_state.last_clicked_asin = None
+    if "notes" not in st.session_state:
+        st.session_state.notes = {} 
 
 
     col_main, col_side = st.columns([3, 1])
@@ -580,10 +582,23 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
                         st.session_state.bookmarks.append(sel)
                         st.success("Bookmarked!")
                     else:
-                        st.info("Already bookmarked.")
+                       st.info("Already bookmarked.")
 
-                # Notes placeholder (future)
-                st.button("Add Note")
+                st.markdown("### Note for this product")
+
+                # existing note (if any)
+                existing_note = st.session_state.notes.get(sel, "")
+
+                note_text = st.text_area(
+                    "Write your note here",
+                    value=existing_note,
+                    key=f"note_{sel}",
+                    height=120,
+                )
+
+                if st.button("Save Note"):
+                    st.session_state.notes[sel] = note_text
+                    st.success("Note saved")
 
     # -----------------------
     # Bookmarks Section
