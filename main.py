@@ -425,10 +425,10 @@ def format_value(val):
         ["asin", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]
     ].copy()
     df_display = df_display.applymap(display_cell)
-st.dataframe(
+    st.dataframe(
     df_display.reset_index(drop=True).style.format(format_value),
     height=450
-)
+    )
 
     # Detail panel
     st.subheader("Product details")
