@@ -513,7 +513,7 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
             st.metric("Final score", display_cell(fs))
 
             if isinstance(fs, (int, float)) and math.isfinite(fs):
-            st.progress(max(0.0, min(TOTAL_MAX_POINTS, float(fs))) / TOTAL_MAX_POINTS)
+             st.progress(max(0.0, min(TOTAL_MAX_POINTS, float(fs))) / TOTAL_MAX_POINTS)
             else:
                 st.write("-")
 
