@@ -395,8 +395,8 @@ def main():
         st.session_state.selected_asin = None
     if "current_page" not in st.session_state:
         st.session_state.current_page = 1
-    if "scroll_to_details" not in st.session_state:
-        st.session_state.scroll_to_details = False
+    if "last_clicked_asin" not in st.session_state:
+        st.session_state.last_clicked_asin = None
 
 
     col_main, col_side = st.columns([3, 1])
@@ -513,7 +513,11 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
 
             if cols[6].button("View", key=f"view_{row.get('asin')}"):
                 st.session_state.selected_asin = row.get("asin")
-                st.session_state.scroll_to_details = True
+                st.session_state.last_clicked_asin = row.get("asin")
+
+            if st.session_state.last_clicked_asin == row.get("asin"):
+                cols[6].markdown("⬇ Scroll down to see details")
+
 
         # BOTTOM pagination
         render_pagination_bottom(total_items, total_pages)
@@ -521,24 +525,9 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
     # -----------------------
     # Detail panel
     # -----------------------
-    # anchor for scrolling
-    st.markdown('<div id="details-anchor"></div>', unsafe_allow_html=True)
+
     st.subheader("Product details")
 
-    # if a View was just clicked, scroll to this section
-    if st.session_state.get("scroll_to_details"):
-        st.markdown(
-            """
-            <script>
-            var el = document.getElementById('details-anchor');
-            if (el) {
-                el.scrollIntoView({behavior: 'smooth', block: 'start'});
-            }
-            </script>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.session_state.scroll_to_details = False
 
     if len(df2) == 0 or st.session_state.selected_asin is None:
         st.write("Click 'View' on a product above to see details.")
