@@ -399,96 +399,95 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
         df2 = df2.sort_values(by="price", ascending=True, na_position="last")
 
     # -----------------------
-    # Product table (interactive) with Select column
+    # Product "table" with View buttons (no ASIN shown)
     # -----------------------
     st.subheader("Products")
 
     if df2.empty:
         st.write("No products to show.")
-        selected_idx = None
     else:
-        # build display df including asin internally
-        df_display = df2[
-            ["asin", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]
-        ].copy()
+        # header row
+        h_cols = st.columns([4, 1, 1, 1, 1, 1, 1])
+        h_cols[0].markdown("**Title**")
+        h_cols[1].markdown("**Price**")
+        h_cols[2].markdown("**Monthly Sales**")
+        h_cols[3].markdown("**Rating**")
+        h_cols[4].markdown("**Reviews**")
+        h_cols[5].markdown("**Final Score**")
+        h_cols[6].markdown("**Action**")
 
-        # checkbox column based on selected_asin
-        df_display["select"] = df_display["asin"] == st.session_state.selected_asin
+        for idx, row in df2.iterrows():
+            cols = st.columns([4, 1, 1, 1, 1, 1, 1])
+            cols[0].write(display_cell(row.get("title")))
+            cols[1].write(display_cell(row.get("price")))
+            cols[2].write(display_cell(row.get("sales_monthly")))
+            cols[3].write(display_cell(row.get("rating")))
+            cols[4].write(display_cell(row.get("reviews")))
+            cols[5].write(display_cell(row.get("final_score")))
 
-        editor_cols = ["select", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]
-
-        edited = st.data_editor(
-            df_display[editor_cols],
-            hide_index=True,
-            key="products_editor",
-            disabled=["title", "price", "sales_monthly", "rating", "reviews", "final_score"],
-        )
-
-        # figure out which row is selected (if any)
-        selected_rows = edited[edited["select"]].index
-        if len(selected_rows) > 0:
-            selected_idx = selected_rows[-1]
-            st.session_state.selected_asin = df2.loc[selected_idx, "asin"]
-        else:
-            selected_idx = None
-            st.session_state.selected_asin = None
+            if cols[6].button("View", key=f"view_{row.get('asin')}"):
+                st.session_state.selected_asin = row.get("asin")
 
     # -----------------------
     # Detail panel
     # -----------------------
     st.subheader("Product details")
 
-    if df2.empty or selected_idx is None:
-        st.write("Select a product from the table above.")
+    if df2.empty or st.session_state.selected_asin is None:
+        st.write("Click 'View' on a product above to see details.")
     else:
-        p = df2.loc[selected_idx]
-        sel = p.get("asin")
+        matches = df2[df2["asin"] == st.session_state.selected_asin]
+        if matches.empty:
+            st.write("Selected product not found (maybe filtered out).")
+        else:
+            p = matches.iloc[0]
+            sel = p.get("asin")
 
-        left, right = st.columns([2, 1])
+            left, right = st.columns([2, 1])
 
-        with left:
-            st.image(p.get("image_url"), width=320)
-            st.markdown(f"### {p.get('title')}")
-            st.write(f"ASIN: {p.get('asin')}  •  Category: {p.get('category')}")
-            st.write(f"Price: {display_cell(p.get('price'))}")
-            st.write(f"Monthly Sales: {display_cell(p.get('sales_monthly'))}")
-            st.write(f"Rating: {display_cell(p.get('rating'))}")
-            st.write(f"Reviews: {display_cell(p.get('reviews'))}")
+            with left:
+                st.image(p.get("image_url"), width=320)
+                st.markdown(f"### {p.get('title')}")
+                st.write(f"ASIN: {p.get('asin')}  •  Category: {p.get('category')}")
+                st.write(f"Price: {display_cell(p.get('price'))}")
+                st.write(f"Monthly Sales: {display_cell(p.get('sales_monthly'))}")
+                st.write(f"Rating: {display_cell(p.get('rating'))}")
+                st.write(f"Reviews: {display_cell(p.get('reviews'))}")
 
-            st.markdown("### Component Scores")
-            st.write(f"Price score (max 20): {display_cell(p.get('score_price'))}")
-            safe_progress(p.get("score_price"), WEIGHTS["price"])
+                st.markdown("### Component Scores")
+                st.write(f"Price score (max 20): {display_cell(p.get('score_price'))}")
+                safe_progress(p.get("score_price"), WEIGHTS["price"])
 
-            st.write(f"Review score (max 15): {display_cell(p.get('score_reviews'))}")
-            safe_progress(p.get("score_reviews"), WEIGHTS["reviews"])
+                st.write(f"Review score (max 15): {display_cell(p.get('score_reviews'))}")
+                safe_progress(p.get("score_reviews"), WEIGHTS["reviews"])
 
-            st.write(f"Rating score (max 20): {display_cell(p.get('score_rating'))}")
-            safe_progress(p.get("score_rating"), WEIGHTS["rating"])
+                st.write(f"Rating score (max 20): {display_cell(p.get('score_rating'))}")
+                safe_progress(p.get("score_rating"), WEIGHTS["rating"])
 
-            st.write(f"Monthly Sales score (max 25): {display_cell(p.get('score_sales'))}")
-            safe_progress(p.get("score_sales"), WEIGHTS["sales"])
+                st.write(f"Monthly Sales score (max 25): {display_cell(p.get('score_sales'))}")
+                safe_progress(p.get("score_sales"), WEIGHTS["sales"])
 
-        with right:
-            st.markdown("### Final Score (max 80)")
-            fs = p.get("final_score")
-            st.metric("Final score", display_cell(fs))
-            if isinstance(fs, (int, float)) and math.isfinite(fs):
-                st.progress(max(0.0, min(TOTAL_MAX_POINTS, float(fs))) / TOTAL_MAX_POINTS)
-            else:
-                st.write("-")
-
-            st.markdown("---")
-
-            # Bookmark button
-            if st.button("Bookmark"):
-                if sel not in st.session_state.bookmarks:
-                    st.session_state.bookmarks.append(sel)
-                    st.success("Bookmarked!")
+            with right:
+                st.markdown("### Final Score (max 80)")
+                fs = p.get("final_score")
+                st.metric("Final score", display_cell(fs))
+                if isinstance(fs, (int, float)) and math.isfinite(fs):
+                    st.progress(max(0.0, min(TOTAL_MAX_POINTS, float(fs))) / TOTAL_MAX_POINTS)
                 else:
-                    st.info("Already bookmarked.")
+                    st.write("-")
 
-            # Notes: to be implemented later
-            st.button("Add Note")
+                st.markdown("---")
+
+                # Bookmark button
+                if st.button("Bookmark"):
+                    if sel not in st.session_state.bookmarks:
+                        st.session_state.bookmarks.append(sel)
+                        st.success("Bookmarked!")
+                    else:
+                        st.info("Already bookmarked.")
+
+                # Notes: to be implemented later
+                st.button("Add Note")
 
     # -----------------------
     # Bookmarks Section
