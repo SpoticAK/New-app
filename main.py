@@ -412,13 +412,23 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
     elif sort_by == "price":
         df2 = df2.sort_values(by="price", ascending=True, na_position="last")
 
+def format_value(val):
+    if val is None or (isinstance(val, float) and not math.isfinite(val)):
+        return "NA"
+    if isinstance(val, float) and val.is_integer():
+        return str(int(val))
+    return str(val)
+    
     # Product table
     st.subheader("Products")
     df_display = df2[
         ["asin", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]
     ].copy()
     df_display = df_display.applymap(display_cell)
-    st.dataframe(df_display.reset_index(drop=True), height=450)
+st.dataframe(
+    df_display.reset_index(drop=True).style.format(format_value),
+    height=450
+)
 
     # Detail panel
     st.subheader("Product details")
