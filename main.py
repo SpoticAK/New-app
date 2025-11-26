@@ -304,12 +304,18 @@ def compute_scores_row(row):
 # UI HELPERS
 # -----------------------
 def display_cell(val):
-    """Show 'NA' for missing, remove .0 from whole floats."""
-    if val is None or (isinstance(val, float) and not math.isfinite(val)):
-        return "NA"
+    """Show '-' for missing, remove .0 from whole floats."""
+    # treat real None / NaN / 'none' / 'nan' / '' all as missing
+    if (
+        val is None
+        or (isinstance(val, float) and not math.isfinite(val))
+        or (isinstance(val, str) and val.strip().lower() in ("none", "nan", "na", ""))
+    ):
+        return "-"
     if isinstance(val, float) and val.is_integer():
         return int(val)
     return val
+
 
 
 def safe_progress(score, max_points):
@@ -330,12 +336,17 @@ def safe_progress(score, max_points):
 
 
 def format_value(val):
-    """Formatter for table display: -, remove .0, but keeps sorting numeric."""
-    if val is None or (isinstance(val, float) and not math.isfinite(val)):
+    """Formatter for table display: '-', remove .0, keep sorting numeric."""
+    if (
+        val is None
+        or (isinstance(val, float) and not math.isfinite(val))
+        or (isinstance(val, str) and val.strip().lower() in ("none", "nan", "na", ""))
+    ):
         return "-"
     if isinstance(val, float) and val.is_integer():
         return str(int(val))
     return str(val)
+
 
 
 # -----------------------
