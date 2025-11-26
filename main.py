@@ -465,7 +465,7 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
         height=450,
     )
 
-    # Detail panel
+# Detail panel
 st.subheader("Product details")
 
 if df2.empty:
@@ -486,48 +486,49 @@ if selected_idx is not None:
     left, right = st.columns([2, 1])
 
     with left:
-            st.image(p.get("image_url"), width=320)
-            st.markdown(f"### {p.get('title')}")
-            st.write(f"ASIN: {p.get('asin')}  •  Category: {p.get('category')}")
-            st.write(f"Price: {display_cell(p.get('price'))}")
-            st.write(f"Monthly Sales: {display_cell(p.get('sales_monthly'))}")
-            st.write(f"Rating: {display_cell(p.get('rating'))}")
-            st.write(f"Reviews: {display_cell(p.get('reviews'))}")
+        st.image(p.get("image_url"), width=320)
+        st.markdown(f"### {p.get('title')}")
+        st.write(f"ASIN: {p.get('asin')}  •  Category: {p.get('category')}")
+        st.write(f"Price: {display_cell(p.get('price'))}")
+        st.write(f"Monthly Sales: {display_cell(p.get('sales_monthly'))}")
+        st.write(f"Rating: {display_cell(p.get('rating'))}")
+        st.write(f"Reviews: {display_cell(p.get('reviews'))}")
 
-            st.markdown("### Component Scores")
-            st.write(f"Price score (max 20): {display_cell(p.get('score_price'))}")
-            safe_progress(p.get("score_price"), WEIGHTS["price"])
+        st.markdown("### Component Scores")
+        st.write(f"Price score (max 20): {display_cell(p.get('score_price'))}")
+        safe_progress(p.get("score_price"), WEIGHTS["price"])
 
-            st.write(f"Review score (max 15): {display_cell(p.get('score_reviews'))}")
-            safe_progress(p.get("score_reviews"), WEIGHTS["reviews"])
+        st.write(f"Review score (max 15): {display_cell(p.get('score_reviews'))}")
+        safe_progress(p.get("score_reviews"), WEIGHTS["reviews"])
 
-            st.write(f"Rating score (max 20): {display_cell(p.get('score_rating'))}")
-            safe_progress(p.get("score_rating"), WEIGHTS["rating"])
+        st.write(f"Rating score (max 20): {display_cell(p.get('score_rating'))}")
+        safe_progress(p.get("score_rating"), WEIGHTS["rating"])
 
-            st.write(f"Monthly Sales score (max 25): {display_cell(p.get('score_sales'))}")
-            safe_progress(p.get("score_sales"), WEIGHTS["sales"])
+        st.write(f"Monthly Sales score (max 25): {display_cell(p.get('score_sales'))}")
+        safe_progress(p.get("score_sales"), WEIGHTS["sales"])
 
-        with right:
-            st.markdown("### Final Score (max 80)")
-            fs = p.get("final_score")
-            st.metric("Final score", display_cell(fs))
-            if isinstance(fs, (int, float)) and math.isfinite(fs):
-                st.progress(max(0.0, min(TOTAL_MAX_POINTS, float(fs))) / TOTAL_MAX_POINTS)
+    with right:
+        st.markdown("### Final Score (max 80)")
+        fs = p.get("final_score")
+        st.metric("Final score", display_cell(fs))
+
+        if isinstance(fs, (int, float)) and math.isfinite(fs):
+            st.progress(max(0.0, min(TOTAL_MAX_POINTS, float(fs))) / TOTAL_MAX_POINTS)
+        else:
+            st.write("-")
+
+        st.markdown("---")
+
+        # Bookmark button
+        if st.button("Bookmark"):
+            if sel not in st.session_state.bookmarks:
+                st.session_state.bookmarks.append(sel)
+                st.success("Bookmarked!")
             else:
-                st.write("-")
+                st.info("Already bookmarked.")
 
-            st.markdown("---")
-
-            # Bookmark button
-            if st.button("Bookmark"):
-                if sel not in st.session_state.bookmarks:
-                    st.session_state.bookmarks.append(sel)
-                    st.success("Bookmarked!")
-                else:
-                    st.info("Already bookmarked.")
-
-            # Add Note button
-            st.button("Add Note")
+        # Add Note button (not implemented yet)
+        st.button("Add Note")
 
     # Show Bookmarks Section
     st.subheader("Your Bookmarks")
