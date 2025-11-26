@@ -40,9 +40,8 @@ def extract_number_int(s):
       '1,111' -> 1111
       '2K+' / '2k' -> 2000
       '1.5K' -> 1500
-      '3M' -> 3000000
       '500+ bought in past month' -> 500
-    Returns int or None.
+    Does NOT support millions (M ignored completely).
     """
     if s is None:
         return None
@@ -50,34 +49,33 @@ def extract_number_int(s):
     if s == "" or s.lower() in ("nan", "none"):
         return None
 
-    lower = s.lower()
+    # find the first numeric chunk
     m = NUM_RE.search(s)
     if not m:
         return None
 
-    raw = m.group(0).replace(",", "")  # remove thousand separators
+    raw = m.group(0).replace(",", "")  # "1,234" -> "1234"
+    end_pos = m.end()
 
-    # K / M modifiers (based on presence in original string)
-    if "k" in lower:
-        try:
-            return int(float(raw) * 1_000)
-        except Exception:
-            pass
-    if "m" in lower:
-        try:
-            return int(float(raw) * 1_000_000)
-        except Exception:
-            pass
+    # look at the immediate suffix right after the number
+    suffix = s[end_pos:].lstrip()
 
-    # Plain integer/float
+    # Default: do NOT apply M logic at all
+    multiplier = 1
+    if suffix:
+        first = suffix[0].lower()
+        if first == "k":     # ONLY accept k / K
+            multiplier = 1000
+
     try:
-        if "." in raw:
-            return int(float(raw))
-        return int(raw)
+        base = float(raw)
     except Exception:
-        digits = re.sub(r"[^\d]", "", raw)
-        return int(digits) if digits else None
+        digits = re.sub(r"[^\d.]", "", raw)
+        if digits == "":
+            return None
+        base = float(digits)
 
+    return int(base * multiplier)
 
 def extract_number_float(s):
     """
