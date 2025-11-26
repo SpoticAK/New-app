@@ -20,7 +20,7 @@ WEIGHTS = {
     "sales": 25,
 }
 TOTAL_MAX_POINTS = sum(WEIGHTS.values())  # 80
-PAGE_SIZE = 25  # items per page
+PAGE_SIZE = 10  # items per page
 
 # -----------------------
 # REGEX HELPERS
@@ -395,6 +395,9 @@ def main():
         st.session_state.selected_asin = None
     if "current_page" not in st.session_state:
         st.session_state.current_page = 1
+    if "scroll_to_details" not in st.session_state:
+        st.session_state.scroll_to_details = False
+
 
     col_main, col_side = st.columns([3, 1])
 
@@ -409,8 +412,7 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
 
     with col_main:
         search_q = st.text_input("Search Title", "")
-        sort_by = st.selectbox("Sort by", ["final_score", "sales_monthly", "price"])
-
+        
     if not uploaded:
         st.info("Upload a CSV to begin.")
         return
@@ -458,16 +460,20 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
         scored_rows.append(base)
     df2 = pd.DataFrame(scored_rows)
 
-    # Search & sort
+    # Search
     if search_q:
         df2 = df2[df2["title"].str.contains(search_q, case=False, na=False)]
 
-    if sort_by == "final_score":
-        df2 = df2.sort_values(by="final_score", ascending=False, na_position="last")
-    elif sort_by == "sales_monthly":
-        df2 = df2.sort_values(by="sales_monthly", ascending=False, na_position="last")
-    elif sort_by == "price":
-        df2 = df2.sort_values(by="price", ascending=True, na_position="last")
+    # Sort by:
+    # 1) info completeness (how many of price/rating/reviews/sales_monthly are present)
+    # 2) final_score (higher first)
+    df2["info_count"] = df2[["price", "rating", "reviews", "sales_monthly"]].notna().sum(axis=1)
+
+    df2 = df2.sort_values(
+        by=["info_count", "final_score"],
+        ascending=[False, False],
+        na_position="last",
+    )
 
     # -----------------------
     # Product "table" with View buttons + pagination (no ASIN shown)
@@ -507,6 +513,7 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
 
             if cols[6].button("View", key=f"view_{row.get('asin')}"):
                 st.session_state.selected_asin = row.get("asin")
+                st.session_state.scroll_to_details = True
 
         # BOTTOM pagination
         render_pagination_bottom(total_items, total_pages)
@@ -514,7 +521,24 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
     # -----------------------
     # Detail panel
     # -----------------------
+    # anchor for scrolling
+    st.markdown('<div id="details-anchor"></div>', unsafe_allow_html=True)
     st.subheader("Product details")
+
+    # if a View was just clicked, scroll to this section
+    if st.session_state.get("scroll_to_details"):
+        st.markdown(
+            """
+            <script>
+            var el = document.getElementById('details-anchor');
+            if (el) {
+                el.scrollIntoView({behavior: 'smooth', block: 'start'});
+            }
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.session_state.scroll_to_details = False
 
     if len(df2) == 0 or st.session_state.selected_asin is None:
         st.write("Click 'View' on a product above to see details.")
