@@ -13,14 +13,12 @@ st.set_page_config(page_title="Product Discovery — MVP", layout="wide")
 # -----------------------
 # CONFIG: WEIGHTS / MAX POINTS
 # -----------------------
-# These are BOTH the max score per component and the "weights"
 WEIGHTS = {
     "price": 20,
     "reviews": 15,
     "rating": 20,
     "sales": 25,
 }
-
 TOTAL_MAX_POINTS = sum(WEIGHTS.values())  # 80
 
 # -----------------------
@@ -28,7 +26,6 @@ TOTAL_MAX_POINTS = sum(WEIGHTS.values())  # 80
 # -----------------------
 NUM_RE = re.compile(r"[\d,.]+")            # numbers with commas / dots
 FLOAT_RE = re.compile(r"(\d+(?:\.\d+)?)")  # float like 4.0
-
 
 # -----------------------
 # PARSING FUNCTIONS
@@ -49,18 +46,14 @@ def extract_number_int(s):
     if s == "" or s.lower() in ("nan", "none"):
         return None
 
-    # find the first numeric chunk
     m = NUM_RE.search(s)
     if not m:
         return None
 
-    raw = m.group(0).replace(",", "")  # "1,234" -> "1234"
+    raw = m.group(0).replace(",", "")
     end_pos = m.end()
 
-    # look at the immediate suffix right after the number
     suffix = s[end_pos:].lstrip()
-
-    # ONLY accept k / K as thousand, ignore M completely
     multiplier = 1
     if suffix:
         first = suffix[0].lower()
@@ -79,10 +72,7 @@ def extract_number_int(s):
 
 
 def extract_number_float(s):
-    """
-    Extract float-like number from messy text.
-    e.g. '4.0 out of 5 stars' -> 4.0
-    """
+    """Extract float-like number from messy text, e.g. '4.0 out of 5 stars' -> 4.0."""
     if s is None:
         return None
     s = str(s).strip()
@@ -101,10 +91,7 @@ def extract_number_float(s):
 
 
 def parse_price(s):
-    """
-    Parse price like '₹249', '1,199', '299.00'
-    Returns float or None.
-    """
+    """Parse price like '₹249', '1,199', '299.00' -> float or None."""
     if s is None:
         return None
     s = str(s).strip()
@@ -126,9 +113,7 @@ def parse_price(s):
 
 
 def parse_rating(s):
-    """
-    Parse rating like '4.0 out of 5 stars' -> 4.0 (clamped to 0–5)
-    """
+    """Parse rating like '4.0 out of 5 stars' -> 4.0 (clamped to 0–5)."""
     v = extract_number_float(s)
     if v is None:
         return None
@@ -144,16 +129,11 @@ def parse_reviews(s):
     """Parse review count strings like '1,111' or '2K+'."""
     return extract_number_int(s)
 
-
 # -----------------------
 # SCORING: YOUR BRACKET RULES
 # -----------------------
-
-# PRICE: (max 20)
-# <200 = 5
-# 200 - 250 = 10
-# 250 - 300 = 15
-# >300 = 20
+# PRICE (max 20)
+# <200 = 5, 200-250 = 10, 250-300 = 15, >300 = 20
 def score_price(price):
     if price is None:
         return None
@@ -161,8 +141,6 @@ def score_price(price):
         p = float(price)
     except Exception:
         return None
-
-    # treat NaN / inf as missing
     if not math.isfinite(p):
         return None
 
@@ -175,12 +153,8 @@ def score_price(price):
     else:
         return 20
 
-
-# REVIEW: (max 15)
-# <50 = 5
-# 50-500 = 10
-# 500 - 1000 = 15
-# >1000 = 5
+# REVIEW (max 15)
+# <50 = 5, 50-500 = 10, 500-1000 = 15, >1000 = 5
 def score_reviews(reviews):
     if reviews is None:
         return None
@@ -188,10 +162,8 @@ def score_reviews(reviews):
         r = float(reviews)
     except Exception:
         return None
-
     if not math.isfinite(r):
         return None
-
     r = int(r)
 
     if r < 50:
@@ -203,12 +175,8 @@ def score_reviews(reviews):
     else:
         return 5
 
-
 # RATING (max 20)
-# <3.4 = 5
-# 3.4-3.7 = 10
-# 3.7-4.0 = 15
-# >4.0 = 20
+# <3.4 = 5, 3.4-3.7 = 10, 3.7-4.0 = 15, >4.0 = 20
 def score_rating(rating):
     if rating is None:
         return None
@@ -216,8 +184,6 @@ def score_rating(rating):
         r = float(rating)
     except Exception:
         return None
-
-    # treat NaN / inf as missing
     if not math.isfinite(r):
         return None
 
@@ -230,14 +196,8 @@ def score_rating(rating):
     else:
         return 20
 
-
 # MONTHLY SALES (max 25)
-# <100 = 5
-# 100-200 = 15
-# 200 - 500 = 20
-# 500-1000 = 25
-# 1000 - 5000 = 10
-# >5000 = 5
+# <100 = 5, 100-200 = 15, 200-500 = 20, 500-1000 = 25, 1000-5000 = 10, >5000 = 5
 def score_sales(sales):
     if sales is None:
         return None
@@ -245,10 +205,8 @@ def score_sales(sales):
         s = float(sales)
     except Exception:
         return None
-
     if not math.isfinite(s):
         return None
-
     s = int(s)
 
     if s < 100:
@@ -264,51 +222,45 @@ def score_sales(sales):
     else:
         return 5
 
-
 # -----------------------
 # FINAL SCORE CALCULATION
 # -----------------------
 def compute_scores_row(row):
     """
     Compute component scores + final_score for a single row dict.
-    Handles missing fields by:
-      - '-' for that component in UI
-      - excluding that component's max points from available_weight
-      - scaling final_score back to TOTAL_MAX_POINTS (80)
+    Missing fields:
+      - component score = None
+      - excluded from available_weight
+      - final_score scaled back to TOTAL_MAX_POINTS (80)
     """
     scores = {}
     available_weight = 0
     obtained_points = 0
 
-    # PRICE
     sp = score_price(row.get("price"))
     scores["score_price"] = sp
     if sp is not None:
         available_weight += WEIGHTS["price"]
         obtained_points += sp
 
-    # REVIEWS
     srv = score_reviews(row.get("reviews"))
     scores["score_reviews"] = srv
     if srv is not None:
         available_weight += WEIGHTS["reviews"]
         obtained_points += srv
 
-    # RATING
     srt = score_rating(row.get("rating"))
     scores["score_rating"] = srt
     if srt is not None:
         available_weight += WEIGHTS["rating"]
         obtained_points += srt
 
-    # SALES
     ss = score_sales(row.get("sales_monthly"))
     scores["score_sales"] = ss
     if ss is not None:
         available_weight += WEIGHTS["sales"]
         obtained_points += ss
 
-    # Final score scaling
     if available_weight == 0:
         final_score = None
     else:
@@ -316,7 +268,6 @@ def compute_scores_row(row):
 
     scores["final_score"] = final_score
     return scores
-
 
 # -----------------------
 # UI HELPERS
@@ -332,7 +283,6 @@ def display_cell(val):
     if isinstance(val, float) and val.is_integer():
         return int(val)
     return val
-
 
 def safe_progress(score, max_points):
     """Safe progress bar for a component with given max_points."""
@@ -350,9 +300,8 @@ def safe_progress(score, max_points):
     v = max(0.0, min(max_points, v))
     st.progress(v / max_points)
 
-
 def format_value(val):
-    """Formatter for table display: '-', remove .0, keep sorting numeric."""
+    """Formatter for table display when using st.dataframe (bookmarks)."""
     if (
         val is None
         or (isinstance(val, float) and not math.isfinite(val))
@@ -363,7 +312,6 @@ def format_value(val):
         return str(int(val))
     return str(val)
 
-
 # -----------------------
 # MAIN APP
 # -----------------------
@@ -371,10 +319,11 @@ def main():
     st.title("Product Discovery — MVP (Custom Scoring)")
     st.write("Upload CSV with columns: **Image, Title, Price, Ratings, Review, Monthly Sales**")
 
-    # initialize bookmarks in session state
+    # session state for bookmarks and selected product
     if "bookmarks" not in st.session_state:
         st.session_state.bookmarks = []
-
+    if "selected_asin" not in st.session_state:
+        st.session_state.selected_asin = None
 
     col_main, col_side = st.columns([3, 1])
 
@@ -388,7 +337,7 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
             uploaded = StringIO(sample)
 
     with col_main:
-        search_q = st.text_input("Search Title / ASIN", "")
+        search_q = st.text_input("Search Title", "")
         sort_by = st.selectbox("Sort by", ["final_score", "sales_monthly", "price"])
 
     if not uploaded:
@@ -436,15 +385,11 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
         sc = compute_scores_row(base)
         base.update(sc)
         scored_rows.append(base)
-
     df2 = pd.DataFrame(scored_rows)
 
     # Search & sort
     if search_q:
-        df2 = df2[
-            df2["title"].str.contains(search_q, case=False, na=False)
-            | df2["asin"].str.contains(search_q, case=False, na=False)
-        ]
+        df2 = df2[df2["title"].str.contains(search_q, case=False, na=False)]
 
     if sort_by == "final_score":
         df2 = df2.sort_values(by="final_score", ascending=False, na_position="last")
@@ -453,35 +398,51 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
     elif sort_by == "price":
         df2 = df2.sort_values(by="price", ascending=True, na_position="last")
 
-    # Product table
+    # -----------------------
+    # Product table (interactive) with Select column
+    # -----------------------
     st.subheader("Products")
-    df_display = df2[
-        ["title", "price", "sales_monthly", "rating", "reviews", "final_score"]
-    ].copy()
-
-    # IMPORTANT: keep df_display numeric; only format with Styler for display
-    st.dataframe(
-        df_display.reset_index(drop=True).style.format(format_value),
-        height=450,
-    )
-
-    # Detail panel
-    st.subheader("Product details")
 
     if df2.empty:
         st.write("No products to show.")
         selected_idx = None
     else:
-        # select by row index, show title in dropdown
-        selected_idx = st.selectbox(
-            "Select product",
-            df2.index,
-            format_func=lambda i: df2.loc[i, "title"],
+        # build display df including asin internally
+        df_display = df2[
+            ["asin", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]
+        ].copy()
+
+        # checkbox column based on selected_asin
+        df_display["select"] = df_display["asin"] == st.session_state.selected_asin
+
+        editor_cols = ["select", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]
+
+        edited = st.data_editor(
+            df_display[editor_cols],
+            hide_index=True,
+            key="products_editor",
+            disabled=["title", "price", "sales_monthly", "rating", "reviews", "final_score"],
         )
 
-    if selected_idx is not None:
+        # figure out which row is selected (if any)
+        selected_rows = edited[edited["select"]].index
+        if len(selected_rows) > 0:
+            selected_idx = selected_rows[-1]
+            st.session_state.selected_asin = df2.loc[selected_idx, "asin"]
+        else:
+            selected_idx = None
+            st.session_state.selected_asin = None
+
+    # -----------------------
+    # Detail panel
+    # -----------------------
+    st.subheader("Product details")
+
+    if df2.empty or selected_idx is None:
+        st.write("Select a product from the table above.")
+    else:
         p = df2.loc[selected_idx]
-        sel = p.get("asin")  # internal ASIN for bookmarks, notes, etc.
+        sel = p.get("asin")
 
         left, right = st.columns([2, 1])
 
@@ -511,26 +472,27 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
             st.markdown("### Final Score (max 80)")
             fs = p.get("final_score")
             st.metric("Final score", display_cell(fs))
-
             if isinstance(fs, (int, float)) and math.isfinite(fs):
-             st.progress(max(0.0, min(TOTAL_MAX_POINTS, float(fs))) / TOTAL_MAX_POINTS)
+                st.progress(max(0.0, min(TOTAL_MAX_POINTS, float(fs))) / TOTAL_MAX_POINTS)
             else:
                 st.write("-")
 
             st.markdown("---")
 
-        # Bookmark button
-        if st.button("Bookmark"):
-            if sel not in st.session_state.bookmarks:
-                st.session_state.bookmarks.append(sel)
-                st.success("Bookmarked!")
-            else:
-                st.info("Already bookmarked.")
+            # Bookmark button
+            if st.button("Bookmark"):
+                if sel not in st.session_state.bookmarks:
+                    st.session_state.bookmarks.append(sel)
+                    st.success("Bookmarked!")
+                else:
+                    st.info("Already bookmarked.")
 
-        # Add Note button (not implemented yet)
-        st.button("Add Note")
+            # Notes: to be implemented later
+            st.button("Add Note")
 
-    # Show Bookmarks Section
+    # -----------------------
+    # Bookmarks Section
+    # -----------------------
     st.subheader("Your Bookmarks")
 
     if len(st.session_state.bookmarks) == 0:
@@ -541,8 +503,9 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
             bookmarked_products[
                 ["title", "price", "sales_monthly", "rating", "reviews", "final_score"]
             ].reset_index(drop=True).style.format(format_value),
-            height=300
+            height=300,
         )
+
     st.markdown("---")
     st.info("Scoring uses your exact brackets. Missing fields show '-' and are excluded from the denominator, then scaled back to a max of 80.")
 
