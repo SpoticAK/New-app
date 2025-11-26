@@ -208,6 +208,10 @@ def score_rating(rating):
     except Exception:
         return None
 
+    # treat NaN / inf as missing
+    if not math.isfinite(r):
+        return None
+
     if r < 3.4:
         return 5
     elif r <= 3.7:
