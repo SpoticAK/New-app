@@ -162,6 +162,10 @@ def score_price(price):
     except Exception:
         return None
 
+    # treat NaN / inf as missing
+    if not math.isfinite(p):
+        return None
+
     if p < 200:
         return 5
     elif p <= 250:
@@ -181,9 +185,14 @@ def score_reviews(reviews):
     if reviews is None:
         return None
     try:
-        r = int(reviews)
+        r = float(reviews)
     except Exception:
         return None
+
+    if not math.isfinite(r):
+        return None
+
+    r = int(r)
 
     if r < 50:
         return 5
@@ -233,9 +242,14 @@ def score_sales(sales):
     if sales is None:
         return None
     try:
-        s = int(sales)
+        s = float(sales)
     except Exception:
         return None
+
+    if not math.isfinite(s):
+        return None
+
+    s = int(s)
 
     if s < 100:
         return 5
@@ -258,7 +272,7 @@ def compute_scores_row(row):
     """
     Compute component scores + final_score for a single row dict.
     Handles missing fields by:
-      - NA for that component
+      - '-' for that component in UI
       - excluding that component's max points from available_weight
       - scaling final_score back to TOTAL_MAX_POINTS (80)
     """
@@ -309,7 +323,6 @@ def compute_scores_row(row):
 # -----------------------
 def display_cell(val):
     """Show '-' for missing, remove .0 from whole floats."""
-    # treat real None / NaN / 'none' / 'nan' / '' all as missing
     if (
         val is None
         or (isinstance(val, float) and not math.isfinite(val))
@@ -321,7 +334,6 @@ def display_cell(val):
     return val
 
 
-
 def safe_progress(score, max_points):
     """Safe progress bar for a component with given max_points."""
     if score is None:
@@ -330,7 +342,7 @@ def safe_progress(score, max_points):
     try:
         v = float(score)
     except Exception:
-        st.write("NA")
+        st.write("-")
         return
     if not math.isfinite(v):
         st.write("-")
@@ -350,7 +362,6 @@ def format_value(val):
     if isinstance(val, float) and val.is_integer():
         return str(int(val))
     return str(val)
-
 
 
 # -----------------------
@@ -443,23 +454,11 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
         ["asin", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]
     ].copy()
 
-    # convert None/NaN/"None"/"nan"/"" to '-'
-    df_display_clean = df_display.reset_index(drop=True).copy()
-
-    df_display_clean = df_display_clean.applymap(
-        lambda v: "-"
-        if (
-            v is None
-            or (isinstance(v, float) and not math.isfinite(v))
-            or (isinstance(v, str) and v.strip().lower() in ("none", "nan", "na", ""))
-        )
-        else (int(v) if isinstance(v, float) and v.is_integer() else v)
+    # IMPORTANT: keep df_display numeric; only format with Styler for display
+    st.dataframe(
+        df_display.reset_index(drop=True).style.format(format_value),
+        height=450,
     )
-
-    st.dataframe(df_display_clean, height=450)
-
-
-
 
     # Detail panel
     st.subheader("Product details")
@@ -499,14 +498,14 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
             if isinstance(fs, (int, float)) and math.isfinite(fs):
                 st.progress(max(0.0, min(TOTAL_MAX_POINTS, float(fs))) / TOTAL_MAX_POINTS)
             else:
-                st.write("NA")
+                st.write("-")
 
             st.markdown("---")
             st.button("Bookmark")
             st.button("Add Note")
 
     st.markdown("---")
-    st.info("Scoring uses your exact brackets. Missing fields show NA and are excluded from the denominator, then scaled back to a max of 80.")
+    st.info("Scoring uses your exact brackets. Missing fields show '-' and are excluded from the denominator, then scaled back to a max of 80.")
 
 
 if __name__ == "__main__":
