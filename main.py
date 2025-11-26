@@ -456,7 +456,7 @@ https://via.placeholder.com/240,Yoga Resistance Band,₹320,3.8 out of 5 stars,3
     # Product table
     st.subheader("Products")
     df_display = df2[
-        ["asin", "title", "price", "sales_monthly", "rating", "reviews", "final_score"]
+        ["title", "price", "sales_monthly", "rating", "reviews", "final_score"]
     ].copy()
 
     # IMPORTANT: keep df_display numeric; only format with Styler for display
