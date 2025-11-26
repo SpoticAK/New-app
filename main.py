@@ -315,7 +315,7 @@ def display_cell(val):
 def safe_progress(score, max_points):
     """Safe progress bar for a component with given max_points."""
     if score is None:
-        st.write("NA")
+        st.write("-")
         return
     try:
         v = float(score)
@@ -323,16 +323,16 @@ def safe_progress(score, max_points):
         st.write("NA")
         return
     if not math.isfinite(v):
-        st.write("NA")
+        st.write("-")
         return
     v = max(0.0, min(max_points, v))
     st.progress(v / max_points)
 
 
 def format_value(val):
-    """Formatter for table display: NA, remove .0, but keeps sorting numeric."""
+    """Formatter for table display: -, remove .0, but keeps sorting numeric."""
     if val is None or (isinstance(val, float) and not math.isfinite(val)):
-        return "NA"
+        return "-"
     if isinstance(val, float) and val.is_integer():
         return str(int(val))
     return str(val)
