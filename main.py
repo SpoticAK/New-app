@@ -485,7 +485,7 @@ if selected_idx is not None:
 
     left, right = st.columns([2, 1])
 
-        with left:
+    with left:
             st.image(p.get("image_url"), width=320)
             st.markdown(f"### {p.get('title')}")
             st.write(f"ASIN: {p.get('asin')}  •  Category: {p.get('category')}")
